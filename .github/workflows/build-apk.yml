@@ -1,0 +1,91 @@
+name: 🚀 Build Flutter APK
+
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Tag rilis ZIP (contoh: v1.0.0)'
+        required: true
+        default: 'v1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-apk:
+    name: Build APK Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🔖 Set Release Tag
+        run: |
+          TAG="${{ github.event.inputs.release_tag }}"
+          if [ -z "$TAG" ]; then TAG="v1.0.0"; fi
+          echo "RELEASE_TAG=$TAG" >> $GITHUB_ENV
+
+      - name: 📥 Download ZIP dari Release
+        run: |
+          wget -q -O project.zip \
+            "https://github.com/${{ github.repository }}/releases/download/${{ env.RELEASE_TAG }}/Tr4sflow.Executive.zip"
+          echo "✅ $(du -sh project.zip | cut -f1)"
+
+      - name: 📦 Ekstrak Project
+        run: |
+          mkdir -p project
+          unzip -qq project.zip -d project
+
+      - name: 🔧 Fix Android SDK Path
+        run: echo "sdk.dir=$ANDROID_HOME" > project/android/local.properties
+
+      - name: ☕ Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: 📱 Install NDK & SDK
+        run: |
+          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager \
+            "ndk;27.0.12077973" \
+            "platforms;android-36" \
+            "build-tools;35.0.0" \
+            --sdk_root=$ANDROID_HOME 2>&1 | tail -3 || true
+
+      - name: 🐦 Setup Flutter 3.32.x
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.32.x'
+          channel: 'stable'
+          cache: true
+
+      - name: 📚 Flutter Pub Get
+        working-directory: project
+        run: flutter pub get
+
+      - name: 🔨 Build APK Release
+        working-directory: project
+        run: flutter build apk --release --no-tree-shake-icons
+
+      - name: 🏷️ Rename APK
+        run: |
+          DATE=$(date +%Y%m%d-%H%M)
+          cp project/build/app/outputs/flutter-apk/app-release.apk \
+             "Tr4sflow-Executive-${DATE}.apk"
+          echo "APK_FILE=Tr4sflow-Executive-${DATE}.apk" >> $GITHUB_ENV
+
+      - name: ⬆️ Upload APK ke Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          files: ${{ env.APK_FILE }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 📎 Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tr4sflow-Executive-APK
+          path: ${{ env.APK_FILE }}
+          retention-days: 7

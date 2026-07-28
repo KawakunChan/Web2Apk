@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
       actions: write
 
     steps:
@@ -54,10 +54,9 @@ jobs:
           mkdir -p output
           find android/app/build/outputs/apk/release/ -name "*.apk" | head -1 | xargs -I{} cp {} output/base.apk
 
-      - name: Upload APK to Release
-        uses: softprops/action-gh-release@v2
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
         with:
-          tag_name: build-${{ github.run_number }}
-          files: output/base.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          name: base-APK
+          path: output/base.apk
+          retention-days: 30
